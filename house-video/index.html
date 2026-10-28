@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Строительство дома</title>
+<style>
+  @font-face { font-family: Manrope; font-weight: 400; src: url(node_modules/@fontsource/manrope/files/manrope-cyrillic-400-normal.woff2); }
+  @font-face { font-family: Manrope; font-weight: 600; src: url(node_modules/@fontsource/manrope/files/manrope-cyrillic-600-normal.woff2); }
+  @font-face { font-family: Manrope; font-weight: 800; src: url(node_modules/@fontsource/manrope/files/manrope-cyrillic-800-normal.woff2); }
+  @font-face { font-family: Manrope; font-weight: 400; src: url(node_modules/@fontsource/manrope/files/manrope-latin-400-normal.woff2); unicode-range: U+0000-00FF; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #c9d6df; }
+  #sky { position: absolute; inset: 0; background: linear-gradient(#7fa3c0 0%, #b9cbd8 45%, #d8dcd8 62%); }
+  canvas { position: absolute; inset: 0; }
+  #ui { position: absolute; inset: 0; font-family: Manrope, sans-serif; color: #fff; pointer-events: none; }
+  .vignette { position: absolute; inset: 0; background:
+      radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(10,14,18,.45) 100%),
+      linear-gradient(to top, rgba(8,12,16,.72) 0%, rgba(8,12,16,0) 34%); }
+  #brand { position: absolute; left: 96px; top: 70px; font-size: 22px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; opacity: .9; }
+  #brand b { font-weight: 800; color: #f2b134; }
+  #card { position: absolute; left: 96px; bottom: 132px; width: 1100px; }
+  #num { font-size: 26px; font-weight: 800; letter-spacing: .2em; color: #f2b134; }
+  #num span { color: rgba(255,255,255,.55); font-weight: 600; }
+  #title { font-size: 76px; font-weight: 800; line-height: 1.04; margin-top: 14px; letter-spacing: -.01em; text-shadow: 0 4px 30px rgba(0,0,0,.35); }
+  #sub { font-size: 30px; font-weight: 400; line-height: 1.35; margin-top: 18px; color: rgba(255,255,255,.88); max-width: 980px; }
+  #bar { position: absolute; left: 96px; right: 96px; bottom: 70px; height: 4px; display: flex; gap: 8px; }
+  #bar i { flex: 1; background: rgba(255,255,255,.22); border-radius: 2px; overflow: hidden; position: relative; }
+  #bar i b { position: absolute; inset: 0; background: #f2b134; transform-origin: left; transform: scaleX(0); }
+  #hero { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding-left: 96px; }
+  #hero .k { font-size: 26px; letter-spacing: .3em; font-weight: 600; color: #f2b134; text-transform: uppercase; }
+  #hero .h { font-size: 112px; font-weight: 800; line-height: 1; margin-top: 22px; letter-spacing: -.02em; text-shadow: 0 6px 40px rgba(0,0,0,.35); }
+  #hero .s { font-size: 34px; margin-top: 26px; color: rgba(255,255,255,.9); }
+  #hero .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,12,16,.55), rgba(8,12,16,0) 65%); z-index: -1; }
+</style>
+</head>
+<body>
+<div id="sky"></div>
+<div id="ui">
+  <div class="vignette"></div>
+  <div id="brand">Дом <b>·</b> этапы строительства</div>
+  <div id="card"><div id="num"></div><div id="title"></div><div id="sub"></div></div>
+  <div id="bar"></div>
+  <div id="hero"><div class="shade"></div><div class="k" id="hk"></div><div class="h" id="hh"></div><div class="s" id="hs"></div></div>
+</div>
+<script type="importmap">{ "imports": { "three": "./node_modules/three/build/three.module.js" } }</script>
+<script type="module" src="scene.js"></script>
+</body>
+</html>

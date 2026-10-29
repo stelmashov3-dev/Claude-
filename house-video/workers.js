@@ -29,7 +29,11 @@ const pantsM = [0x3d4a5e, 0x2c2f36, 0x4a4a3c, 0x34465e].map((c) => M({ color: c,
 const hairM = [0x2b211b, 0x4a3426, 0x1b1714, 0x7a6450].map((c) => M({ color: c, roughness: 0.9 }));
 const eyeM = M({ color: 0x15120f, roughness: 0.3 }), lipM = M({ color: 0x8a5a4a, roughness: 0.7 });
 
-export function makeWorker({ helmet = 'white', vest = 'orange', skin = 0, beard = false, build = 1, height = 1, jacket = 0, pants = 0, hair = 0, seed = (made++) * 13.7 } = {}) {
+export function makeWorker(opts = {}) {
+  // anything not given varies per worker, deterministically, so a crew never looks cloned
+  const id = made++;
+  const { helmet = 'white', vest = 'orange', skin = id % 3, beard = id % 3 === 1, build = 0.95 + (id * 37 % 20) / 100, height = 0.96 + (id * 53 % 9) / 100,
+    jacket = id % 5, pants = (id * 3) % 4, hair = (id * 7) % 4, seed = id * 13.7 } = opts;
   const g = new THREE.Group(), j = {}, pm = pantsM[pants % pantsM.length], jm = jackets[jacket % jackets.length], sk = mats.skin[skin], hm = hairM[hair % hairM.length];
   const hips = new THREE.Group(); hips.position.y = 0.95; g.add(hips); j.hips = hips;
   const pelvis = mesh(new THREE.BoxGeometry(0.32, 0.18, 0.21), pm); hips.add(pelvis);

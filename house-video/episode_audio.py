@@ -11,6 +11,7 @@ rng = np.random.default_rng(7)
 VOICE_FX = 'highpass=f=70,equalizer=f=170:t=q:w=1:g=2.5,equalizer=f=3500:t=q:w=1.4:g=3,acompressor=threshold=-20dB:ratio=3:attack=5:release=90:makeup=2'
 def tts(text, i):
     raw, out, voice = f'{tmp}/r{i}.wav', f'{tmp}/s{i}.wav', ep.get('voice', 'aleksandr-hq')
+    text = text.replace(' — ', ', ').replace('—', ', ').replace('«', '').replace('»', '')  # dashes and quotes make Piper stumble
     if voice.startswith('piper:'):  # neural voice, e.g. "piper:dmitri" -> voices/vits-piper-ru_RU-dmitri-medium
         vdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voices', f'vits-piper-ru_RU-{voice[6:]}-medium')
         subprocess.run([sys.executable, '-I', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'neural_tts.py'), vdir, raw, str(ep.get('speed', 1.0)), text,

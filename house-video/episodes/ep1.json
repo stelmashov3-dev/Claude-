@@ -1,7 +1,7 @@
 {
  "num": 1,
  "title": "Подготовка участка",
- "voice": "piper:irina",
+ "voice": "piper:ruslan",
  "shots": [
   {
    "id": "intro",
@@ -431,7 +431,7 @@
    ]
   }
  ],
- "speed": 1.12,
- "noise": 0.8,
- "noise_w": 0.9
+ "speed": 1.05,
+ "noise": 0.4,
+ "noise_w": 0.5
 }

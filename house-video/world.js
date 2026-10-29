@@ -354,6 +354,14 @@ for (const s of [1, -1]) for (let i = 0; i < 10; i++) {
   const t = tex.roof.clone(); t.repeat.set(3.3, 17); t.needsUpdate = true; o.material = mat.roof.clone(); o.material.map = t;
   o.userData = { s, i, x: -5.7 + 0.585 + i * 1.14 }; scene.add(o); sheets.push(o);
 }
+// under-roof membrane strips and battens (episode 5), laid from the eaves up between rafters and sheets
+const slopeL = rafterL + 0.15, onSlope = (s, d, lift) => [s * (4.8 - d * Math.cos(ANG)) - s * lift * Math.sin(ANG), yb(4.8) + 0.18 / Math.cos(ANG) + d * Math.sin(ANG) + lift * Math.cos(ANG)];
+const membMat = M({ color: 0xb9c4cc, roughness: 0.55 });
+const membStrips = [], battens = [];
+for (const s of [1, -1]) {
+  for (let i = 0; i < 4; i++) { const o = box(1, 0.006, slopeL / 4 + 0.02, membMat); o.userData = { s, i }; scene.add(o); membStrips.push(o); }
+  for (let i = 0; i < 15; i++) { const o = box(1, 0.03, 0.05, mat.wood); o.userData = { s, i, d: 0.15 + i * (slopeL - 0.3) / 14 }; scene.add(o); battens.push(o); }
+}
 const ridgeCap = box(11.6, 0.22, 0.22, mat.roof); ridgeCap.rotation.x = Math.PI / 4; scene.add(ridgeCap);
 
 // windows and door
@@ -375,6 +383,38 @@ const windows = OPENINGS.map((op) => {
   g.userData.base = g.position.clone(); g.userData.out = out; g.userData.ax = w.ax;
   scene.add(g); return g;
 });
+
+// ---------- facade (episode 6): mineral wool, render, exterior scaffold, landscaping ----------
+const OUTER = ['S1', 'S2', 'S3', 'S4'];
+const facade = [];
+for (const wid of OUTER) {
+  const w = WALLS[wid], out = wid === 'S1' || wid === 'S3' ? -1 : 1;
+  for (let r = 0; r <= ROWS; r++) { // rows of blocks plus the ring beam band
+    const iv = r < ROWS ? rowIntervals(r, wid, w) : [[w.lo, w.hi]];
+    for (const [a, b] of iv) {
+      const ext = w.ax === 'x' ? 0.11 : 0; // long walls wrap the corners
+      facade.push({ w, out, r, a0: a === w.lo ? a - ext : a, a1: b === w.hi ? b + ext : b, f: (OUTER.indexOf(wid) + (a - w.lo) / (w.hi - w.lo)) / 4 });
+    }
+  }
+}
+const woolMat = M({ map: noisyTex(0xc9b77a, 0xddcf98, { scale: 16, grain: 30, seed: 31 }), roughness: 1 });
+const renderMat = M({ map: noisyTex(0xe6dfd2, 0xf0ebe2, { scale: 20, grain: 10, seed: 33 }), roughness: 0.95 });
+const woolIM = new THREE.InstancedMesh(UNIT, woolMat, facade.length), renderIM = new THREE.InstancedMesh(UNIT, renderMat, facade.length);
+for (const o of [woolIM, renderIM]) { o.castShadow = o.receiveShadow = true; scene.add(o); }
+const extScaffold = new THREE.Group(); scene.add(extScaffold);
+for (const x of [-5.2, -2.6, 0, 2.6, 5.2]) for (const z of [4.75, 5.45]) { const p = cyl(0.024, 0.024, 3.4, mat.steel, 8); p.position.set(x, 1.7, z); extScaffold.add(p); }
+for (const y of [1.55, 2.95]) {
+  for (const z of [4.75, 5.45]) { const r = box(10.4, 0.04, 0.04, mat.steel); r.position.set(0, y + 0.45, z); extScaffold.add(r); }
+  for (let i = 0; i < 3; i++) { const pl = box(10.4, 0.05, 0.22, mat.wood); pl.position.set(0, y, 4.86 + i * 0.24); extScaffold.add(pl); }
+}
+// finished lawn over the building pad (a frame around the house) and a paved path to the door
+const lawnFrame = new THREE.Group(); scene.add(lawnFrame);
+const lawnMat = M({ map: noisyTex(0x5d7a38, 0x86a052, { scale: 6, grain: 22, seed: 41, repeat: [3, 3] }), roughness: 1, transparent: true });
+for (const [x0, x1, z0, z1] of [[-8, 8, 4.35, 7], [-8, 8, -7, -4.35], [-8, -5.35, -4.35, 4.35], [5.35, 8, -4.35, 4.35]]) {
+  const o = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.03, z1 - z0), lawnMat); o.position.set((x0 + x1) / 2, 0.015, (z0 + z1) / 2); o.receiveShadow = true; lawnFrame.add(o);
+}
+const pathMat = M({ color: 0x8d8a84, roughness: 0.9, transparent: true });
+{ const o = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 2.7), pathMat); o.position.set(0.85, 0.03, 5.7); o.receiveShadow = true; lawnFrame.add(o); }
 
 // ---------- machines ----------
 function wheel(r = 0.5, w = 0.4) { const g = new THREE.Group(); const t = cyl(r, r, w, mat.dark, 20); t.rotation.x = Math.PI / 2; g.add(t); const h = cyl(r * 0.5, r * 0.5, w + 0.02, mat.steel, 16); h.rotation.x = Math.PI / 2; g.add(h); return g; }
@@ -606,11 +646,37 @@ export function update(T) {
   rafters.instanceMatrix.needsUpdate = true; q.identity();
   sheets.forEach((o) => {
     const { s, i, x } = o.userData, k = ease(84.0 + i * 0.28 + (s < 0 ? 0.12 : 0), 84.5 + i * 0.28 + (s < 0 ? 0.12 : 0), t);
-    const ze = s * 4.8, ye = yb(ze) + 0.18 / Math.cos(ANG) + 0.02;
+    const ze = s * 4.8, ye = yb(ze) + 0.18 / Math.cos(ANG) + 0.055;
     o.visible = k > 0.001; o.rotation.set(s * ANG, 0, 0);
     o.position.set(x, ye + (1 - k) * 0.8, ze); o.material.opacity = 1;
   });
+  membStrips.forEach((o) => {
+    const { s, i } = o.userData, k = ease(83.72 + i * 0.03 + (s < 0 ? 0.015 : 0), 83.76 + i * 0.03 + (s < 0 ? 0.015 : 0), t);
+    const [z, y] = onSlope(s, (i + 0.5) * slopeL / 4, 0.004 + i * 0.001); o.visible = k > 0.001;
+    o.scale.x = Math.max(11.4 * k, 1e-3); o.position.set(-5.7 + 5.7 * k, y, z); o.rotation.set(s * ANG, 0, 0);
+  });
+  battens.forEach((o) => {
+    const { s, i, d } = o.userData, k = ease(83.87 + i * 0.006, 83.9 + i * 0.006, t);
+    const [z, y] = onSlope(s, d, 0.022); o.visible = k > 0.001;
+    o.scale.x = Math.max(11.4 * k, 1e-3); o.position.set(-5.7 + 5.7 * k, y, z); o.rotation.set(s * ANG, 0, 0);
+  });
   { const k = ease(87.3, 87.8, t); ridgeCap.visible = k > 0.001; ridgeCap.position.set(0, RIDGE + 0.27 + (1 - k) * 0.5, 0); }
+  // facade: wool boards bottom-up, then render over them; scaffold stands while the crew works outside
+  facade.forEach((p, i) => {
+    const yy0 = WALL_Y0 + p.r * ROW_H, yy1 = p.r < ROWS ? yy0 + ROW_H : ROOF_Y;
+    for (const [im, t0, d0, d1] of [[woolIM, 96.6, 0.15, 0.25], [renderIM, 99.7, 0.25, 0.262]]) {
+      const k = ease(t0 + p.r * 0.17 + p.f * 0.6, t0 + p.r * 0.17 + p.f * 0.6 + 0.35, T);
+      if (k <= 0) { m4.makeScale(0, 0, 0); im.setMatrixAt(i, m4); continue; }
+      const o0 = p.w.c + p.out * (d0 + (1 - k) * 0.5), o1 = p.w.c + p.out * (d1 + (1 - k) * 0.5);
+      if (p.w.ax === 'x') { vp.set((p.a0 + p.a1) / 2, (yy0 + yy1) / 2, (o0 + o1) / 2); vs.set(p.a1 - p.a0, yy1 - yy0 - 0.002, Math.abs(o1 - o0)); }
+      else { vp.set((o0 + o1) / 2, (yy0 + yy1) / 2, (p.a0 + p.a1) / 2); vs.set(Math.abs(o1 - o0), yy1 - yy0 - 0.002, p.a1 - p.a0); }
+      m4.compose(vp, q.identity(), vs); im.setMatrixAt(i, m4);
+    }
+  });
+  woolIM.instanceMatrix.needsUpdate = renderIM.instanceMatrix.needsUpdate = true;
+  extScaffold.visible = T > 96.3 && T < 102.2;
+  for (const g of gables) g.material = T > 101.6 ? renderMat : mat.block; // gables get the same render as the walls
+  { const k = ease(102.3, 103.6, T); lawnFrame.visible = k > 0.001; lawnMat.opacity = k; pathMat.opacity = k; spoil.visible = spoil.visible && k < 0.5; }
   // stage 14: windows
   windows.forEach((g, i) => {
     const k = ease(88.3 + i * 0.35, 88.9 + i * 0.35, t); g.visible = k > 0.001;
@@ -619,4 +685,4 @@ export function update(T) {
   });
 }
 
-export { clamp, smooth, ease, lin, outBack, lerp, rng, M, mat, box, cyl, ubox, setExt, SEGS, padG, WALLS, ROW_H, WALL_Y0, TRENCH_BOT, DIG0, DIG_SEG, rowStart, rowDone };
+export { clamp, smooth, ease, lin, outBack, lerp, rng, M, mat, box, cyl, ubox, setExt, SEGS, padG, WALLS, ROW_H, WALL_Y0, TRENCH_BOT, DIG0, DIG_SEG, rowStart, rowDone, yb, ANG, ROOF_Y, RIDGE };

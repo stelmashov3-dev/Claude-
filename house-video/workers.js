@@ -111,6 +111,16 @@ export function vibratorUnit() { // engine on the ground
   const f = mesh(new THREE.BoxGeometry(0.46, 0.04, 0.36), mats.dark); f.position.y = 0.02; g.add(f); return g;
 }
 
+export function gasTorch() { // roofing torch with a live flame at the nozzle
+  const g = new THREE.Group();
+  const rod = mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.85, 8), mats.steel); rod.position.y = -0.42; g.add(rod);
+  const cup = mesh(new THREE.CylinderGeometry(0.045, 0.025, 0.12, 12), mats.steel); cup.position.y = -0.88; g.add(cup);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.85 }));
+  flame.position.y = -1.04; flame.rotation.x = Math.PI; g.add(flame); g.userData.flame = flame;
+  return g;
+}
+export function gasBottle() { const o = mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.6, 16), M({ color: 0xc8361d, roughness: 0.5 })); o.position.y = 0.3; const g = new THREE.Group(); g.add(o); return g; }
+
 export function attach(w, tool, hand = 'rHand') { if (w.tool) w.tool.parent?.remove(w.tool); w.tool = tool; if (tool) w.j[hand].add(tool); }
 
 // ---- poses: every pose writes all joints, so switching is stateless ----

@@ -166,7 +166,7 @@ drive.rotation.set(-Math.PI / 2, 0, Math.PI / 2); drive.position.set(38, -0.49, 
 const padG = new THREE.Group(); scene.add(padG);
 {
   const rect = (x0, z0, x1, z1) => { const s = new THREE.Shape(); s.moveTo(x0, -z0); s.lineTo(x1, -z0); s.lineTo(x1, -z1); s.lineTo(x0, -z1); s.closePath(); return s; };
-  const outer = rect(-8, -7, 8, 7); const hole = new THREE.Path(); hole.moveTo(-5.3, 4.3); hole.lineTo(-5.3, -4.3); hole.lineTo(5.3, -4.3); hole.lineTo(5.3, 4.3); hole.closePath(); outer.holes.push(hole);
+  const outer = rect(-8, -7, 8, 7); const hole = new THREE.Path(); hole.moveTo(-6.0, 5.0); hole.lineTo(-6.0, -5.0); hole.lineTo(6.0, -5.0); hole.lineTo(6.0, 5.0); hole.closePath(); outer.holes.push(hole);
   const shapes = [outer, rect(-4.7, -3.7, -0.3, 3.7), rect(0.3, -3.7, 4.7, 3.7)];
   const g = new THREE.ExtrudeGeometry(shapes, { depth: 3, bevelEnabled: false });
   g.rotateX(-Math.PI / 2); g.translate(0, -3, 0);
@@ -202,6 +202,12 @@ SEGS.forEach((s, si) => {
     chunks.push({ o, s, si, j, n, lo: lo + (hi - lo) * j / n, hi: lo + (hi - lo) * (j + 1) / n });
   }
 });
+// berms: ground just outside the perimeter trenches, dug out in episode 3 to open the foundation's outer face
+const berms = SEGS.filter((s) => s.id !== 'S5').map((s) => {
+  const o = new THREE.Mesh(UNIT, soilTopMats.slice()); o.receiveShadow = o.castShadow = true; padG.add(o);
+  const nn = s.ax === 'x' ? s.n[1] : s.n[0], b = [s.c + nn * 0.3, s.c + nn * 1.0].sort((p, r) => p - r);
+  return { o, s, ext: (top) => s.ax === 'x' ? [-6.0, 6.0, TRENCH_BOT, top, ...b] : [...b, TRENCH_BOT, top, -4.3, 4.3] };
+});
 // spoil heap
 function heap(seed, r, h, m) {
   const g = new THREE.ConeGeometry(r, h, 48, 10); const p = g.attributes.position, nz = makeNoise(seed);
@@ -232,7 +238,24 @@ const concrete = SEGS.map(() => { const o = ubox(mat.wetConcrete); padG.add(o); 
 const filmMats = (s) => { const inv = new THREE.MeshBasicMaterial({ visible: false }); const m = [mat.film, mat.film, inv, mat.film, mat.film, mat.film]; if (s.ax === 'x') { m[0] = m[1] = inv; } else { m[4] = m[5] = inv; } return m; };
 const film = SEGS.map((s) => { const o = new THREE.Mesh(UNIT, filmMats(s)); o.receiveShadow = true; padG.add(o); return o; });
 const membrane = SEGS.map(() => { const o = ubox(mat.membrane); padG.add(o); return o; });
+// foundation insulation (episode 3): bitumen coating and XPS boards on the outer faces of the perimeter strips
+const coatMat = M({ color: 0x141210, roughness: 0.25, metalness: 0.05 });
+const xpsMat = M({ map: noisyTex(0xe9902f, 0xf4ad4f, { scale: 6, grain: 10, seed: 23 }), roughness: 0.85 });
+const PERIM = SEGS.filter((s) => s.id !== 'S5');
+const coat = PERIM.map(() => { const o = ubox(coatMat); padG.add(o); return o; });
+const xpsList = [];
+PERIM.forEach((s, si) => {
+  const [lo, hi] = s.ax === 'x' ? [s.a0 - 0.3, s.a1 + 0.3] : [s.a0 + 0.2, s.a1 - 0.2], n = Math.ceil((hi - lo) / 1.2);
+  for (let i = 0; i < n; i++) for (const [y0, y1] of [[-1.0, -0.35], [-0.35, 0.3]]) xpsList.push({ s, si, a0: lo + (hi - lo) * i / n, a1: lo + (hi - lo) * (i + 1) / n, y0, y1, f: (si + i / n) / PERIM.length });
+});
+const xps = new THREE.InstancedMesh(UNIT, xpsMat, xpsList.length); xps.castShadow = xps.receiveShadow = true; padG.add(xps);
+// outward band [d0,d1] off the axis of a perimeter strip, as world extents
+function faceExt(s, d0, d1, y0, y1, a0, a1) {
+  const nn = s.ax === 'x' ? s.n[1] : s.n[0], b0 = s.c + nn * d0, b1 = s.c + nn * d1;
+  return s.ax === 'x' ? [a0, a1, y0, y1, Math.min(b0, b1), Math.max(b0, b1)] : [Math.min(b0, b1), Math.max(b0, b1), y0, y1, a0, a1];
+}
 const FW_Y0 = -1.0, FW_Y1 = 0.42, FW_OFF = 0.225, FW_T = 0.03;
+const formMat = mat.wood.clone(); formMat.transparent = true; // fades out when the formwork is stripped
 const formBoards = [];
 SEGS.forEach((s, si) => {
   for (const side of [1, -1]) {
@@ -241,13 +264,13 @@ SEGS.forEach((s, si) => {
     if (outer) spans = s.ax === 'x' ? [[s.a0 - 0.24, s.a1 + 0.24]] : [[s.a0 - 0.24, s.a1 + 0.24]];
     else spans = s.ax === 'x' ? [[s.a0 + 0.21, -0.21], [0.21, s.a1 - 0.21]] : [[s.a0 + 0.21, s.a1 - 0.21]];
     for (const [a0, a1] of spans) {
-      const o = ubox(mat.wood); const off = s.c + (s.ax === 'x' ? s.n[1] : s.n[0]) * side * FW_OFF;
+      const o = ubox(formMat); const off = s.c + (s.ax === 'x' ? s.n[1] : s.n[0]) * side * FW_OFF;
       o.userData = { s, si, a0, a1, off }; formBoards.push(o); padG.add(o);
     }
   }
 });
 const spacers = [];
-SEGS.forEach((s, si) => { for (let a = s.a0 + 0.5; a < s.a1 - 0.2; a += 1.0) { const o = ubox(mat.wood); o.userData = { s, si, a }; spacers.push(o); padG.add(o); } });
+SEGS.forEach((s, si) => { for (let a = s.a0 + 0.5; a < s.a1 - 0.2; a += 1.0) { const o = ubox(formMat); o.userData = { s, si, a }; spacers.push(o); padG.add(o); } });
 
 // rebar
 const barG = new THREE.CylinderGeometry(0.024, 0.024, 1, 8); barG.rotateZ(Math.PI / 2); // along x, length 1
@@ -390,7 +413,20 @@ for (const o of [exc.g, dump.g, mix.g, rol.g]) o.traverse((c) => { if (c.isMesh)
 const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), vs = new THREE.Vector3(), vp = new THREE.Vector3();
 const DIG0 = 18.6, DIG_SEG = 1.55;
 
-export function update(t) {
+export function update(T) {
+  // master time; episode 3 inserts 5 s of insulation work at 58.2, so later stages run on t = T - 5
+  const t = T < 58.2 ? T : Math.max(58.2, T - 5);
+  PERIM.forEach((s, i) => {
+    const a = ease(58.4 + i * 0.4, 59.6 + i * 0.4, T), [lo, hi] = s.ax === 'x' ? [s.a0 - 0.215, s.a1 + 0.215] : [s.a0 - 0.215, s.a1 + 0.215];
+    setExt(coat[i], ...faceExt(s, 0.206, 0.214, -1.0, lerp(-1.0, 0.3, a), lo, hi)); coat[i].visible = a > 0.001;
+  });
+  xpsList.forEach((p, i) => {
+    const k = ease(60.5 + p.f * 2.2 + (p.y0 > -0.5 ? 0.15 : 0), 60.8 + p.f * 2.2 + (p.y0 > -0.5 ? 0.15 : 0), T);
+    if (k <= 0) { m4.makeScale(0, 0, 0); xps.setMatrixAt(i, m4); return; }
+    const [x0, x1, y0, y1, z0, z1] = faceExt(p.s, 0.216 + (1 - k) * 0.4, 0.296 + (1 - k) * 0.4, p.y0, p.y1, p.a0 + 0.004, p.a1 - 0.004);
+    vp.set((x0 + x1) / 2, (y0 + y1) / 2 - 0.004, (z0 + z1) / 2); vs.set(x1 - x0, y1 - y0 - 0.008, z1 - z0); m4.compose(vp, q.identity(), vs); xps.setMatrixAt(i, m4);
+  });
+  xps.instanceMatrix.needsUpdate = true;
   // stage 1: dump truck reverses in, tips, leaves; pad rises; roller compacts
   {
     const inP = ease(5.0, 7.4, t), outP = ease(9.6, 11.6, t);
@@ -411,7 +447,7 @@ export function update(t) {
   }
   // stage 2: setting out
   {
-    const fade = 1 - ease(58.5, 59.5, t);
+    const fade = 1 - ease(56.4, 57.4, T); // profile boards come down once the concrete is in
     stakes.forEach((o, i) => { const a = ease(13.3 + i * 0.07, 13.8 + i * 0.07, t) * fade; const [x, z] = o.userData.p; setExt(o, x - 0.04, x + 0.04, -0.3, -0.3 + 1.05 * a, z - 0.04, z + 0.04); });
     boards.forEach((o, i) => { const a = ease(14.3 + i * 0.2, 15.0 + i * 0.2, t) * fade; const [x0, x1, y0, y1, z0, z1] = o.userData.ext; setExt(o, x0, x1, y0, lerp(y0, y1, a), z0, z1); });
     strings.forEach((o, i) => {
@@ -430,6 +466,11 @@ export function update(t) {
     const ext = c.s.ax === 'x' ? [c.lo, c.hi, TRENCH_BOT, top, c.s.c - TRENCH_HW, c.s.c + TRENCH_HW] : [c.s.c - TRENCH_HW, c.s.c + TRENCH_HW, TRENCH_BOT, top, c.lo, c.hi];
     setExt(c.o, ...ext);
   }
+  berms.forEach((b, i) => {
+    const dig = ease(57.3 + i * 0.25, 58.2 + i * 0.25, T), fill = ease(58.2, 60.8, t) * (T > 58.2 ? 1 : 0);
+    const top = fill > 0 ? lerp(-1.0, 0, fill) : lerp(0, -1.0, dig);
+    b.o.material[2] = dig > 0 && fill <= 0 ? mat.soil : mat.sand; setExt(b.o, ...b.ext(top));
+  });
   spoil.scale.setScalar(Math.max(1e-3, ease(18.8, 26.5, t) * (1 - ease(58.2, 60.8, t) * 0.85)));
   spoil.visible = t > 18.8;
   {
@@ -454,18 +495,18 @@ export function update(t) {
   // stage 4: cushion
   SEGS.forEach((s, i) => { const a = ease(27.4 + i * 0.4, 29.4 + i * 0.4, t); setExt(cushion[i], ...stripExt(s, TRENCH_HW - 0.002, TRENCH_BOT, TRENCH_BOT + 0.2 * a + (a > 0 ? 0 : -1))); });
   // stage 5: formwork, stripped at stage 9
-  const strip = ease(56.2, 58.0, t);
+  const strip = ease(56.3, 57.6, t) * 0.4; formMat.opacity = 1 - ease(56.3, 57.6, t); formMat.depthWrite = formMat.opacity > 0.99;
   formBoards.forEach((o) => {
     const { s, si, a0, a1, off } = o.userData; const a = ease(31.3 + si * 0.75, 32.6 + si * 0.75, t);
-    const y1 = lerp(FW_Y0, FW_Y1, a) + strip * 3, y0 = FW_Y0 + strip * 3; o.visible = strip < 0.999;
+    const y1 = lerp(FW_Y0, FW_Y1, a) + strip, y0 = FW_Y0 + strip; o.visible = formMat.opacity > 0.001;
     if (s.ax === 'x') setExt(o, a0, a1, y0, y1, off - FW_T / 2, off + FW_T / 2); else setExt(o, off - FW_T / 2, off + FW_T / 2, y0, y1, a0, a1);
-    if (strip >= 0.999) o.visible = false;
+    if (formMat.opacity <= 0.001) o.visible = false;
   });
   spacers.forEach((o) => {
     const { s, si, a } = o.userData; const k = outBack(lin(35.0 + si * 0.25 + (a - s.a0) * 0.03, 35.5 + si * 0.25 + (a - s.a0) * 0.03, t));
-    const y = FW_Y1 + 0.01 + strip * 3; const hw = 0.27 * k;
+    const y = FW_Y1 + 0.01 + strip; const hw = 0.27 * k;
     if (s.ax === 'x') setExt(o, a - 0.025, a + 0.025, y, y + 0.05 * (k > 0 ? 1 : 0), s.c - hw, s.c + hw); else setExt(o, s.c - hw, s.c + hw, y, y + 0.05 * (k > 0 ? 1 : 0), a - 0.025, a + 0.025);
-    if (strip >= 0.999) o.visible = false;
+    if (formMat.opacity <= 0.001) o.visible = false;
   });
   // stage 6: film
   SEGS.forEach((s, i) => { const a = ease(37.3 + i * 0.5, 39.0 + i * 0.5, t); setExt(film[i], ...stripExt(s, 0.205, FW_Y0, lerp(FW_Y0 + 0.01, 0.4, a))); film[i].visible = a > 0.001; });

@@ -34,24 +34,28 @@ def lines(text, maxc=64):
 # ---- voice and timing ----
 clips, shots, cues, t, k = [], [], [], 0.0, 0
 
-# a whole-episode voice-over (voiceover/epN.mp3, e.g. from ElevenLabs) is cut into scenes at its longest pauses
-def scene_takes(path, nscenes):
+# a whole-episode voice-over (voiceover/epN.mp3, e.g. from ElevenLabs) is cut into scenes: each cut goes to the pause
+# nearest to where that scene's text should end (by character count), preferring longer pauses
+def scene_takes(path, texts):
     out = f'{tmp}/full.wav'
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', path, '-ar', str(SR), '-ac', '1', '-af', 'highpass=f=60', out], check=True)
     with wave.open(out) as w: x = np.frombuffer(w.readframes(w.getnframes()), '<i2').astype(np.float32) / 32768
     hop = int(0.02 * SR); rms = np.sqrt(np.convolve(x ** 2, np.ones(hop) / hop, 'same')[::hop] + 1e-12)
-    quiet = rms < np.max(rms) * 10 ** (-38 / 20)
+    quiet = 20 * np.log10(rms / rms.max()) < -35
     runs, i = [], 0
     while i < len(quiet):
         if quiet[i]:
             j = i
             while j < len(quiet) and quiet[j]: j += 1
-            if i > 0 and j < len(quiet): runs.append((j - i, (i + j) // 2))
+            if i > 0 and j < len(quiet) and j - i >= 5: runs.append(((j - i) * 0.02, (i + j) / 2 * 0.02))
             i = j
         else: i += 1
-    cuts = sorted(c for _, c in sorted(runs, reverse=True)[:nscenes - 1])
-    if len(cuts) < nscenes - 1: raise SystemExit(f'only {len(cuts) + 1} pauses found for {nscenes} scenes in {path}')
-    bounds = [0] + [c * hop for c in cuts] + [len(x)]
+    dur = len(x) / SR; ends = np.cumsum([len(s) for s in texts]) / sum(len(s) for s in texts) * dur
+    cuts = []
+    for want in ends[:-1]:
+        near = [(ln - 0.08 * abs(c - want), c) for ln, c in runs if abs(c - want) < 2.5 and (not cuts or c > cuts[-1] + 1)]
+        cuts.append(max(near)[1] if near else want)
+    bounds = [0] + [int(c * SR) for c in cuts] + [len(x)]
     takes = []
     for a0, b0 in zip(bounds, bounds[1:]):
         seg = x[a0:b0]; loud = np.where(np.abs(seg) > 0.01)[0]
@@ -59,7 +63,7 @@ def scene_takes(path, nscenes):
     return takes
 
 full = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voiceover', f"ep{ep['num']}.mp3")
-takes = scene_takes(full, len(ep['shots'])) if os.path.exists(full) else None
+takes = scene_takes(full, [' '.join(s['vo']) for s in ep['shots']]) if os.path.exists(full) else None
 for si, s in enumerate(ep['shots']):
     if takes is not None:  # one recorded take per scene; subtitles spread over it by text length
         lead = 0.9 if 'hero' in s else 0.45

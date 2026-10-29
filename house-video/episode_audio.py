@@ -10,7 +10,7 @@ rng = np.random.default_rng(7)
 
 def tts(text, i):
     raw, out = f'{tmp}/r{i}.wav', f'{tmp}/s{i}.wav'
-    subprocess.run(['RHVoice-test', '-p', ep.get('voice', 'aleksandr-hq'), '-r', '100', '-o', raw], input=text.encode(), check=True)
+    subprocess.run(['RHVoice-test', '-p', ep.get('voice', 'aleksandr-hq'), '-r', str(ep.get('rate', 100)), '-o', raw], input=text.encode(), check=True)
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', raw, '-ar', str(SR), '-ac', '1', '-af', 'silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse', out], check=True)
     with wave.open(out) as w: return np.frombuffer(w.readframes(w.getnframes()), '<i2').astype(np.float32) / 32768
 
@@ -60,34 +60,79 @@ def ep_intervals(a, b):
 
 def env(t0, t1, a=0.5, r=0.5):
     e = np.clip((tt - t0) / a, 0, 1) * np.clip((t1 - tt) / r, 0, 1); return e * e * (3 - 2 * e)
+def env_local(L):
+    x = np.arange(L) / L; return np.clip(x * 20, 0, 1) * np.clip((1 - x) * 20, 0, 1)
 def filt(x, lo=None, hi=None):
     X = np.fft.rfft(x); f = np.fft.rfftfreq(len(x), 1 / SR)
     if hi: X *= 1 / (1 + (f / hi) ** 4)
     if lo: X *= 1 / (1 + (lo / np.maximum(f, 1)) ** 4)
     return np.fft.irfft(X, len(x))
 
-# ---- music bed ----
+# ---- music bed: warm pads plus a light groove (112 bpm) from the first stage on ----
 midi = lambda m: 440 * 2 ** ((m - 69) / 12)
-chords = [[57, 60, 64, 69], [53, 57, 60, 65], [48, 55, 60, 64], [55, 59, 62, 67]]; roots = [45, 41, 48, 43]; CH = 5.0
-pad = np.zeros(n); bass = np.zeros(n)
+chords = [[57, 60, 64, 69], [53, 57, 60, 65], [48, 55, 60, 64], [55, 59, 62, 67]]; roots = [45, 41, 48, 43]
+BPM = 112; beat = 60 / BPM; bar = beat * 4; CH = bar * 2
+groove0 = shots[0]['dur'] - 0.3 if len(shots) > 1 else 0
+pad = np.zeros(n); bass = np.zeros(n); pluck = np.zeros(n)
 for ci in range(int(total / CH) + 1):
-    t0 = ci * CH; sl = (tt > t0 - 1) & (tt < t0 + CH + 1); e = env(t0 - 0.8, t0 + CH + 0.8, 1.2, 1.2)[sl]
+    t0 = ci * CH; sl = (tt > t0 - 1) & (tt < t0 + CH + 1); e = env(t0 - 0.6, t0 + CH + 0.6, 0.8, 0.8)[sl]
     for m in chords[ci % 4]:
-        for det in (-0.12, 0.0, 0.11):
+        for det in (-0.1, 0.0, 0.1):
             f = midi(m) * 2 ** (det / 12); x = tt[sl]
-            pad[sl] += e * (np.sin(2 * np.pi * f * x) + 0.35 * np.sin(4 * np.pi * f * x) + 0.12 * np.sin(6 * np.pi * f * x)) / 3
-    bass[sl] += e * np.sin(2 * np.pi * midi(roots[ci % 4] - 12) * tt[sl])
-pad = filt(pad, hi=1800) * 0.06; bass *= 0.1
-beat = 60 / 96; pulse = np.zeros(n)
-for b in np.arange(shots[0]['dur'], total - 3, beat):
-    i = int(b * SR); L = int(0.35 * SR); x = np.arange(L) / SR
-    pulse[i:i + L] += (np.sin(2 * np.pi * (48 + 60 * np.exp(-x * 30)) * x) * np.exp(-x * 9))[: n - i] * 0.16
+            pad[sl] += e * (np.sin(2 * np.pi * f * x) + 0.3 * np.sin(4 * np.pi * f * x)) / 3
+    # pulsing eighth-note bass and a soft sixteenth arpeggio
+    for k8 in range(int(CH / (beat / 2))):
+        st = t0 + k8 * beat / 2
+        if st < groove0: continue
+        i = int(st * SR); L = int(beat / 2 * SR * 0.9); x = np.arange(L) / SR
+        f = midi(roots[ci % 4] - 12); bass[i:i + L] += (np.sin(2 * np.pi * f * x) + 0.25 * np.sin(4 * np.pi * f * x))[: max(0, n - i)] * np.exp(-x * 5)[: max(0, n - i)]
+    for k16 in range(int(CH / (beat / 4))):
+        st = t0 + k16 * beat / 4
+        if st < groove0: continue
+        m = chords[ci % 4][[0, 2, 1, 3, 2, 1][k16 % 6]] + 12; i = int(st * SR); L = int(0.25 * SR); x = np.arange(L) / SR
+        pluck[i:i + L] += (np.sin(2 * np.pi * midi(m) * x) * np.exp(-x * 18))[: max(0, n - i)]
+pad = filt(pad, hi=2200) * 0.045; bass = filt(bass, hi=400) * 0.11; pluck = filt(pluck, hi=5000) * 0.035
 noise = rng.standard_normal(n)
+drums = np.zeros(n)
+for b in np.arange(groove0, total - 2.5, beat):
+    i = int(b * SR); L = int(0.3 * SR); x = np.arange(L) / SR
+    drums[i:i + L] += (np.sin(2 * np.pi * (45 + 70 * np.exp(-x * 35)) * x) * np.exp(-x * 10))[: n - i] * 0.3
+    bi = round((b - groove0) / beat)
+    if bi % 2 == 1:  # clap on 2 and 4
+        L2 = int(0.18 * SR); drums[i:i + L2] += (filt(noise[i:i + L2], 900, 4000) * np.exp(-np.arange(L2) / SR * 22))[: n - i] * 0.25
+    for h in (0, 0.5):  # hats on eighths
+        j = int((b + h * beat) * SR); L3 = int(0.04 * SR)
+        if j + L3 < n: drums[j:j + L3] += noise[j:j + L3] * np.exp(-np.arange(L3) / SR * 90) * (0.05 if h else 0.03)
+drums = filt(drums, hi=12000)
 wh = np.zeros(n)
-for sh in shots[1:]:
-    a, b = sh['start'] - 0.7, sh['start'] + 0.25; m = (tt > a) & (tt < b); x = (tt[m] - a) / (b - a)
-    wh[m] += noise[m] * np.sin(np.pi * x) ** 2 * x
-wh = filt(wh, 400, 3500) * 0.12
+for sh in shots[1:]:  # riser into every cut
+    a0, b0 = sh['start'] - 1.0, sh['start'] + 0.15; m = (tt > a0) & (tt < b0); x = (tt[m] - a0) / (b0 - a0)
+    wh[m] += noise[m] * x ** 2 * np.sin(np.pi * np.clip(x, 0, 1)) ** 0.3
+wh = filt(wh, 500, 6000) * 0.1
+
+# ---- spot effects listed per shot: reverse beeps, hammer blows, shovel scrapes ----
+sfx = np.zeros(n)
+for s, sh in zip(ep['shots'], shots):
+    a0, a1 = sh['start'], sh['start'] + sh['dur']
+    for fx in s.get('sfx', []):
+        if fx['k'] == 'beep':
+            x0, x1 = (to_ep(fx['T'][0]) or a0), (to_ep(fx['T'][1]) or a1)
+            for b in np.arange(x0, x1, 0.9):
+                i = int(b * SR); L = int(0.45 * SR); x = np.arange(L) / SR
+                sfx[i:i + L] += (np.sign(np.sin(2 * np.pi * 1150 * x)) * 0.3 * env_local(L))[: n - i] * 0.12
+        else:
+            rate, ph = fx['rate'], fx['ph']
+            for kk in range(int(a0 * rate) - 1, int(a1 * rate) + 2):
+                b = (kk + ph) / rate
+                if not (a0 + 0.1 < b < a1 - 0.1): continue
+                i = int(b * SR)
+                if fx['k'] == 'hammer':
+                    L = int(0.25 * SR); x = np.arange(L) / SR
+                    hit = np.sin(2 * np.pi * 95 * x) * np.exp(-x * 30) + filt(noise[i:i + L], 1500, 7000) * np.exp(-x * 60) * 0.6
+                    sfx[i:i + L] += hit[: n - i] * 0.35
+                else:
+                    L = int(0.35 * SR); x = np.arange(L) / SR
+                    sfx[i:i + L] += (filt(noise[i:i + L], 300, 2500) * np.sin(np.pi * x / 0.35) ** 2)[: n - i] * 0.12
 
 # ---- machines ----
 eng = np.zeros(n)
@@ -102,7 +147,7 @@ eng = filt(eng + 0.1 * filt(noise, hi=200), hi=320) * 0.3
 
 # ---- mix: duck everything under the voice ----
 venv = filt(np.abs(voice), hi=4); venv = np.clip(venv / (np.max(venv) + 1e-6) * 4, 0, 1)
-bed = (pad + bass + pulse + wh + eng) * (1 - 0.55 * venv)
+bed = (pad + bass + pluck + drums + wh) * (1 - 0.6 * venv) + (eng + sfx) * (1 - 0.3 * venv)
 mix = bed + voice * 0.95
 mix *= env(0, total, 1.0, 2.5)
 mix = np.tanh(mix * 1.2) / 1.2; mix /= np.max(np.abs(mix)) / 0.9

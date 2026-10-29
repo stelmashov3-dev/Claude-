@@ -1,6 +1,7 @@
 // Episode runner: maps episode time t to master construction time T shot by shot, drives camera, cast and overlay.
 // episode.html?ep=1&fmt=h|v   (window.renderAt(t) renders one frame; ?t= previews, ?play plays in real time)
 import { THREE, VERT, camera, renderer, scene, update, smooth, clamp, lerp, ease } from './world.js';
+import { setNow } from './workers.js';
 
 const qs = new URLSearchParams(location.search), epn = qs.get('ep') || '1';
 const [ep, tm, cast] = await Promise.all([
@@ -19,6 +20,10 @@ function cameraAt(s, k) {
   const keys = s.cam, kk = k * 0.7 + smooth(k) * 0.3, x = kk * (keys.length - 1), i = Math.min(Math.floor(x), keys.length - 2), f = x - i;
   const p = v3(keys[i][0]).lerp(v3(keys[i + 1][0]), f), g = v3(keys[i][1]).lerp(v3(keys[i + 1][1]), f);
   if (VERT) p.sub(g).multiplyScalar(1.3).add(g);
+  // gentle hand-held drift, scaled with the distance to the subject
+  const d = p.distanceTo(g) * 0.006, t = k * s.dur + s.start;
+  p.x += d * (Math.sin(t * 0.9) + 0.5 * Math.sin(t * 2.3 + 1)); p.y += d * (Math.sin(t * 1.1 + 2) * 0.8 + 0.3 * Math.sin(t * 3.1)); p.z += d * Math.sin(t * 0.7 + 4);
+  g.x += d * 0.5 * Math.sin(t * 1.3 + 3); g.y += d * 0.4 * Math.sin(t * 1.7 + 5);
   camera.position.copy(p); camera.lookAt(g);
 }
 
@@ -40,6 +45,13 @@ function overlay(t, si, k) {
     const a = ease(s.start + 0.3, s.start + 1.1, t) * (si === shots.length - 1 ? 1 : 1 - ease(s.start + s.dur - 0.7, s.start + s.dur - 0.1, t));
     hero.style.opacity = a; hero.style.transform = `translateX(${(1 - a) * -30}px)`;
   } else hero.style.opacity = 0;
+  // big number callout: pops in after the shot opens, out before it ends
+  const co = $('callout');
+  if (s.callout) {
+    const a = ease(s.start + 0.6, s.start + 1.0, t) * (1 - ease(s.start + s.dur - 0.5, s.start + s.dur - 0.15, t));
+    co.firstChild.textContent = s.callout.v; co.lastChild.textContent = s.callout.l;
+    co.style.opacity = a; co.style.transform = `scale(${0.85 + 0.15 * a})`;
+  } else co.style.opacity = 0;
   const cue = tm.cues.find((c) => t >= c.t0 - 0.05 && t < c.t1 + 0.15), sub = $('subs').firstChild;
   sub.textContent = cue ? cue.text : ''; sub.style.visibility = cue ? 'visible' : 'hidden';
   $('bar').firstChild.style.transform = `scaleX(${clamp(t / tm.total)})`;
@@ -50,7 +62,7 @@ window.DURATION = tm.total;
 window.renderAt = (t) => {
   const si = shotAt(t), s = shots[si], k = clamp((t - s.start) / s.dur);
   const T = lerp(s.T[0], s.T[1], k);
-  update(T); cast.update(T, t); cameraAt(s, k); overlay(t, si, k);
+  update(T); setNow(t); cast.update(T, t); cameraAt(s, k); overlay(t, si, k);
   renderer.render(scene, camera);
 };
 window.ready = document.fonts.ready.then(() => { window.renderAt(0); return true; });

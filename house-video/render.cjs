@@ -1,7 +1,9 @@
 // PAGE='episode.html?ep=1&fmt=h' node render.cjs <framesDir> <workers> [fps]  -> frames/f00000.jpg ...
 const { chromium } = require('playwright');
+const serve = require('./serve.cjs');
 const fs = require('fs');
 (async () => {
+  const srv = await serve();
   const [out, nw = '4', fpsArg = '30'] = process.argv.slice(2); const N = +nw, fps = +fpsArg;
   fs.mkdirSync(out, { recursive: true });
   const browsers = [];
@@ -11,7 +13,7 @@ const fs = require('fs');
     const page = process.env.PAGE || 'index.html', vert = page.includes('fmt=v');
     const p = await b.newPage({ viewport: vert ? { width: 1080, height: 1920 } : { width: 1920, height: 1080 } });
     p.on('pageerror', e => console.log('ERR', e.message));
-    await p.goto('http://localhost:8765/' + page); await p.waitForFunction(() => !!window.ready, null, { timeout: 60000 }); await p.evaluate(() => window.ready);
+    await p.goto(`http://127.0.0.1:${srv.port}/` + page); await p.waitForFunction(() => !!window.ready, null, { timeout: 60000 }); await p.evaluate(() => window.ready);
     const total = Math.round(await p.evaluate(() => window.DURATION) * fps);
     for (let i = k; i < total; i += N) {
       const f = `${out}/f${String(i).padStart(5, '0')}.jpg`;
@@ -21,5 +23,5 @@ const fs = require('fs');
       if (++done % 100 === 0) console.log(`${done}/${total} frames, ${((Date.now() - t0) / done).toFixed(0)} ms/frame`);
     }
   }));
-  await Promise.all(browsers.map(b => b.close())); console.log('DONE');
+  await Promise.all(browsers.map(b => b.close())); console.log('DONE'); srv.close();
 })();

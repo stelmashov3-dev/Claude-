@@ -3,3 +3,4 @@ node_modules/
 house-video/preview-*.mp4
 house-video/out/
 house-video/episodes/*.wav
+house-video/voices/

@@ -8,10 +8,19 @@ src = sys.argv[1]; ep = json.load(open(src)); base = src[:-5]
 tmp = tempfile.mkdtemp()
 rng = np.random.default_rng(7)
 
+VOICE_FX = 'highpass=f=70,equalizer=f=170:t=q:w=1:g=2.5,equalizer=f=3500:t=q:w=1.4:g=3,acompressor=threshold=-20dB:ratio=3:attack=5:release=90:makeup=2'
 def tts(text, i):
-    raw, out = f'{tmp}/r{i}.wav', f'{tmp}/s{i}.wav'
-    subprocess.run(['RHVoice-test', '-p', ep.get('voice', 'aleksandr-hq'), '-r', str(ep.get('rate', 100)), '-o', raw], input=text.encode(), check=True)
-    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', raw, '-ar', str(SR), '-ac', '1', '-af', 'silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse', out], check=True)
+    raw, out, voice = f'{tmp}/r{i}.wav', f'{tmp}/s{i}.wav', ep.get('voice', 'aleksandr-hq')
+    if voice.startswith('piper:'):  # neural voice, e.g. "piper:dmitri" -> voices/vits-piper-ru_RU-dmitri-medium
+        vdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voices', f'vits-piper-ru_RU-{voice[6:]}-medium')
+        subprocess.run([sys.executable, '-I', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'neural_tts.py'), vdir, raw, str(ep.get('speed', 1.0)), text,
+                        str(ep.get('noise', 0.6)), str(ep.get('noise_w', 0.8))], check=True, capture_output=True)
+    else:
+        subprocess.run(['RHVoice-test', '-p', voice, '-r', str(ep.get('rate', 100)), '-o', raw], input=text.encode(), check=True)
+    trim = 'silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse'
+    p = ep.get('pitch', 1.0)  # >1 raises the voice without changing its tempo
+    pitch = f'asetrate=22050*{p},aresample={SR},atempo={1 / p:.5f},' if voice.startswith('piper:') and p != 1.0 else ''
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', raw, '-ar', str(SR), '-ac', '1', '-af', pitch + trim + ',' + VOICE_FX, out], check=True)
     with wave.open(out) as w: return np.frombuffer(w.readframes(w.getnframes()), '<i2').astype(np.float32) / 32768
 
 def lines(text, maxc=64):

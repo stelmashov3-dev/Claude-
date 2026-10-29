@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Сериал: строим дом</title>
+<style>
+  @font-face { font-family: Manrope; font-weight: 400; src: url(node_modules/@fontsource/manrope/files/manrope-cyrillic-400-normal.woff2); }
+  @font-face { font-family: Manrope; font-weight: 600; src: url(node_modules/@fontsource/manrope/files/manrope-cyrillic-600-normal.woff2); }
+  @font-face { font-family: Manrope; font-weight: 800; src: url(node_modules/@fontsource/manrope/files/manrope-cyrillic-800-normal.woff2); }
+  @font-face { font-family: Manrope; font-weight: 400; src: url(node_modules/@fontsource/manrope/files/manrope-latin-400-normal.woff2); unicode-range: U+0000-00FF; }
+  @font-face { font-family: Manrope; font-weight: 800; src: url(node_modules/@fontsource/manrope/files/manrope-latin-800-normal.woff2); unicode-range: U+0000-00FF; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #c9d6df; }
+  body.v, body.v html { width: 1080px; height: 1920px; }
+  #sky { position: absolute; inset: 0; background: linear-gradient(#7fa3c0 0%, #b9cbd8 45%, #d8dcd8 62%); }
+  canvas { position: absolute; inset: 0; }
+  #ui { position: absolute; inset: 0; font-family: Manrope, sans-serif; color: #fff; pointer-events: none; }
+  .vignette { position: absolute; inset: 0; background:
+      radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(10,14,18,.4) 100%),
+      linear-gradient(to bottom, rgba(8,12,16,.55) 0%, rgba(8,12,16,0) 30%),
+      linear-gradient(to top, rgba(8,12,16,.6) 0%, rgba(8,12,16,0) 26%); }
+  #brand { position: absolute; left: 96px; top: 64px; font-size: 22px; font-weight: 600; letter-spacing: .28em; text-transform: uppercase; opacity: .9; }
+  #brand b { font-weight: 800; color: #f2b134; }
+  #card { position: absolute; left: 96px; top: 118px; width: 1100px; }
+  #num { font-size: 22px; font-weight: 800; letter-spacing: .2em; color: #f2b134; }
+  #title { font-size: 64px; font-weight: 800; line-height: 1.04; margin-top: 10px; text-shadow: 0 4px 30px rgba(0,0,0,.35); }
+  #sub { font-size: 28px; line-height: 1.35; margin-top: 12px; color: rgba(255,255,255,.9); }
+  #subs { position: absolute; left: 0; right: 0; bottom: 104px; text-align: center; }
+  #subs span { display: inline-block; max-width: 1300px; font-size: 40px; font-weight: 600; line-height: 1.25; padding: 10px 26px; border-radius: 10px; background: rgba(10,14,18,.55); }
+  #bar { position: absolute; left: 96px; right: 96px; bottom: 56px; height: 4px; background: rgba(255,255,255,.22); border-radius: 2px; }
+  #bar b { position: absolute; inset: 0; background: #f2b134; transform-origin: left; transform: scaleX(0); border-radius: 2px; }
+  #hero { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding-left: 96px; }
+  #hero .k { font-size: 26px; letter-spacing: .3em; font-weight: 600; color: #f2b134; text-transform: uppercase; }
+  #hero .h { font-size: 112px; font-weight: 800; line-height: 1; margin-top: 22px; letter-spacing: -.02em; text-shadow: 0 6px 40px rgba(0,0,0,.35); }
+  #hero .s { font-size: 34px; margin-top: 26px; color: rgba(255,255,255,.9); }
+  #hero .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,12,16,.55), rgba(8,12,16,0) 65%); z-index: -1; }
+  /* vertical 9:16: keep clear of the Reels/Shorts UI at the bottom and right */
+  body.v #brand { left: 64px; top: 150px; font-size: 26px; }
+  body.v #card { left: 64px; top: 210px; width: 900px; }
+  body.v #num { font-size: 28px; }
+  body.v #title { font-size: 84px; }
+  body.v #sub { font-size: 38px; }
+  body.v #subs { bottom: 560px; padding: 0 70px; }
+  body.v #subs span { font-size: 52px; max-width: 900px; }
+  body.v #bar { left: 64px; right: 64px; bottom: 470px; }
+  body.v #hero { padding-left: 64px; justify-content: flex-start; padding-top: 560px; }
+  body.v #hero .h { font-size: 128px; }
+  body.v #hero .s { font-size: 42px; }
+  body.v #hero .shade { background: linear-gradient(180deg, rgba(8,12,16,.15), rgba(8,12,16,.6) 45%, rgba(8,12,16,.1) 80%); }
+</style>
+</head>
+<body>
+<script>if (new URLSearchParams(location.search).get('fmt') === 'v') document.body.classList.add('v');</script>
+<div id="sky"></div>
+<div id="ui">
+  <div class="vignette"></div>
+  <div id="brand"></div>
+  <div id="card"><div id="num"></div><div id="title"></div><div id="sub"></div></div>
+  <div id="subs"><span></span></div>
+  <div id="bar"><b></b></div>
+  <div id="hero"><div class="shade"></div><div class="k" id="hk"></div><div class="h" id="hh"></div><div class="s" id="hs"></div></div>
+</div>
+<script type="importmap">{ "imports": { "three": "./node_modules/three/build/three.module.js" } }</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

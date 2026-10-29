@@ -1,3 +1,5 @@
 video-skills/
 node_modules/
 house-video/preview-*.mp4
+house-video/out/
+house-video/episodes/*.wav

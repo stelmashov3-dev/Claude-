@@ -1,4 +1,4 @@
-// PAGE='episode.html?ep=1&fmt=h' node render.cjs <framesDir> <workers> [fps]  -> frames/f00000.jpg ...
+// PAGE='episode.html?ep=1&fmt=h' [FN=renderReel] node render.cjs <framesDir> <workers> [fps]  -> frames/f00000.jpg ...
 const { chromium } = require('playwright');
 const serve = require('./serve.cjs');
 const fs = require('fs');
@@ -18,7 +18,7 @@ const fs = require('fs');
     for (let i = k; i < total; i += N) {
       const f = `${out}/f${String(i).padStart(5, '0')}.jpg`;
       if (fs.existsSync(f)) continue;
-      await p.evaluate(t => window.renderAt(t), i / fps);
+      await p.evaluate(([fn, t]) => window[fn](t), [process.env.FN || 'renderAt', i / fps]);
       await p.screenshot({ path: f, quality: 93 });
       if (++done % 100 === 0) console.log(`${done}/${total} frames, ${((Date.now() - t0) / done).toFixed(0)} ms/frame`);
     }

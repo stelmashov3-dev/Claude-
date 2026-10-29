@@ -90,6 +90,27 @@ export function plateCompactor() { // free-standing machine, pushed by a worker
   return g;
 }
 
+export function hammer() {
+  const g = new THREE.Group();
+  const h = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.34, 8), mats.wood); h.position.y = -0.12; g.add(h);
+  const hd = mesh(new THREE.BoxGeometry(0.04, 0.04, 0.13), mats.steel); hd.position.set(0, -0.28, 0); g.add(hd);
+  return g;
+}
+export function shoulderLoad(len, m, r = 0.05) { // a board or a bar carried on the right shoulder, along the walking direction
+  const o = len > 0 && r < 0.03 ? mesh(new THREE.CylinderGeometry(r, r, len, 8), m) : mesh(new THREE.BoxGeometry(0.15, 0.025, len), m);
+  if (r < 0.03) o.rotation.x = Math.PI / 2; o.position.set(0.18, 0.58, 0.2); return o;
+}
+export function vibratorPoker() { // held in both hands, poker hangs down into the concrete
+  const g = new THREE.Group();
+  const hose = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8), mats.dark); hose.position.y = -0.4; g.add(hose);
+  const pk = mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 10), mats.steel); pk.position.y = -1.05; g.add(pk);
+  return g;
+}
+export function vibratorUnit() { // engine on the ground
+  const g = new THREE.Group(), b = mesh(new THREE.BoxGeometry(0.4, 0.3, 0.3), mats.yellow); b.position.y = 0.15; g.add(b);
+  const f = mesh(new THREE.BoxGeometry(0.46, 0.04, 0.36), mats.dark); f.position.y = 0.02; g.add(f); return g;
+}
+
 export function attach(w, tool, hand = 'rHand') { if (w.tool) w.tool.parent?.remove(w.tool); w.tool = tool; if (tool) w.j[hand].add(tool); }
 
 // ---- poses: every pose writes all joints, so switching is stateless ----
@@ -130,6 +151,18 @@ export const poses = {
   },
   look(w, ph) { // eye to an instrument
     base(w); const j = w.j; R(j.spine, 0.35); R(j.neck, 0.1); R(j.lSh, -1.2, 0, -0.2); R(j.rSh, -1.2, 0, 0.2); R(j.lEl, -1.2); R(j.rEl, -1.2 + Math.sin(ph * 6) * 0.05);
+  },
+  carry(w, ph) { // walking with a load on the right shoulder, right hand steadying it
+    poses.walk(w, ph); const j = w.j; R(j.rSh, -0.2, 0, 2.6); R(j.rEl, -1.9);
+  },
+  vibrate(w, ph) { // bent over the formwork, both hands lowering the poker; small up-down strokes
+    base(w); const j = w.j, m = Math.sin(ph * Math.PI * 2) * 0.08;
+    R(j.spine, 0.65 + m * 0.5); R(j.lHip, -0.5); R(j.rHip, -0.2); R(j.lKnee, 0.5); R(j.rKnee, 0.3); j.hips.position.y = 0.9;
+    R(j.lSh, -1.15 + m, 0, 0.35); R(j.rSh, -1.15 + m, 0, -0.35); R(j.lEl, -0.25); R(j.rEl, -0.25); R(j.rHand, 1.0 - m);
+  },
+  guide(w, ph) { // steering the mixer chute with both hands
+    base(w); const j = w.j, m = Math.sin(ph * Math.PI * 2) * 0.05;
+    R(j.spine, 0.2); R(j.lSh, -1.3 + m, 0, 0.1); R(j.rSh, -1.3 - m, 0, -0.1); R(j.lEl, -0.5); R(j.rEl, -0.5); R(j.lHip, -0.2); R(j.lKnee, 0.2);
   },
   holdStaff(w, ph) { base(w); const j = w.j; R(j.rSh, -0.5, 0, 0.1); R(j.rEl, -1.1); R(j.lSh, -0.2); R(j.spine, Math.sin(ph * Math.PI * 2) * 0.02); },
 };

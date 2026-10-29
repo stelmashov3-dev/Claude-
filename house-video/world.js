@@ -85,7 +85,7 @@ const mat = {
   sand: M({ map: tex.sand, roughness: 0.98 }),
   soil: M({ map: tex.soil, roughness: 1 }),
   concrete: M({ map: tex.concrete, roughness: 0.9 }),
-  wetConcrete: M({ map: tex.concrete, roughness: 0.35, color: 0x8e8e8c }),
+  wetConcrete: M({ map: tex.concrete, roughness: 0.4, color: 0xa9a8a3 }),
   wood: M({ map: tex.wood, roughness: 0.85 }),
   block: M({ map: tex.block, roughness: 0.92 }),
   film: M({ color: 0x30363c, roughness: 0.35, metalness: 0.1, side: THREE.DoubleSide }),

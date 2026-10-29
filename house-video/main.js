@@ -30,7 +30,8 @@ function overlay(t, si, k) {
     const first = !prev?.stage || prev.stage.n !== st.n, last = !next?.stage || next.stage.n !== st.n;
     const a = (first ? ease(s.start + 0.1, s.start + 0.6, t) : 1) * (last ? 1 - ease(s.start + s.dur - 0.4, s.start + s.dur - 0.05, t) : 1);
     $('num').textContent = `ЭТАП ${String(st.n).padStart(2, '0')}`; $('title').textContent = st.title; $('sub').textContent = st.sub;
-    $('sub').style.opacity = first ? 1 : ease(s.start, s.start + 0.4, t);
+    const fresh = first ? 1 : ease(s.start, s.start + 0.4, t);
+    $('sub').style.opacity = fresh; $('title').style.opacity = !first && prev.stage.title !== st.title ? fresh : 1;
     card.style.opacity = a; card.style.transform = `translateY(${(1 - a) * -16}px)`;
   } else card.style.opacity = 0;
   const hero = $('hero');

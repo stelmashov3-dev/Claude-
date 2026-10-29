@@ -33,7 +33,44 @@ def lines(text, maxc=64):
 
 # ---- voice and timing ----
 clips, shots, cues, t, k = [], [], [], 0.0, 0
-for s in ep['shots']:
+
+# a whole-episode voice-over (voiceover/epN.mp3, e.g. from ElevenLabs) is cut into scenes at its longest pauses
+def scene_takes(path, nscenes):
+    out = f'{tmp}/full.wav'
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', path, '-ar', str(SR), '-ac', '1', '-af', 'highpass=f=60', out], check=True)
+    with wave.open(out) as w: x = np.frombuffer(w.readframes(w.getnframes()), '<i2').astype(np.float32) / 32768
+    hop = int(0.02 * SR); rms = np.sqrt(np.convolve(x ** 2, np.ones(hop) / hop, 'same')[::hop] + 1e-12)
+    quiet = rms < np.max(rms) * 10 ** (-38 / 20)
+    runs, i = [], 0
+    while i < len(quiet):
+        if quiet[i]:
+            j = i
+            while j < len(quiet) and quiet[j]: j += 1
+            if i > 0 and j < len(quiet): runs.append((j - i, (i + j) // 2))
+            i = j
+        else: i += 1
+    cuts = sorted(c for _, c in sorted(runs, reverse=True)[:nscenes - 1])
+    if len(cuts) < nscenes - 1: raise SystemExit(f'only {len(cuts) + 1} pauses found for {nscenes} scenes in {path}')
+    bounds = [0] + [c * hop for c in cuts] + [len(x)]
+    takes = []
+    for a0, b0 in zip(bounds, bounds[1:]):
+        seg = x[a0:b0]; loud = np.where(np.abs(seg) > 0.01)[0]
+        takes.append(seg[max(0, loud[0] - 960): loud[-1] + 2400] if len(loud) else seg)
+    return takes
+
+full = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voiceover', f"ep{ep['num']}.mp3")
+takes = scene_takes(full, len(ep['shots'])) if os.path.exists(full) else None
+for si, s in enumerate(ep['shots']):
+    if takes is not None:  # one recorded take per scene; subtitles spread over it by text length
+        lead = 0.9 if 'hero' in s else 0.45
+        start = t; t += lead; a = takes[si]; d = len(a) / SR; clips.append((t, a))
+        ls = [x for sent in s['vo'] for x in lines(sent)]; tot = sum(len(x) for x in ls); c = t
+        for x in ls: dd = d * len(x) / tot; cues.append({'t0': round(c, 3), 't1': round(c + dd, 3), 'text': x}); c += dd
+        t += d + 0.35
+        t += 0.5 if 'hero' not in s else 1.2
+        t = max(t, start + (4.5 if 'hero' in s else 3.0))
+        shots.append({'id': s['id'], 'start': round(start, 3), 'dur': round(t - start, 3)})
+        continue
     lead = 0.9 if 'hero' in s else 0.45
     start = t; t += lead
     for sent in s['vo']:

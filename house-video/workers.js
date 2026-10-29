@@ -121,6 +121,7 @@ export function gasTorch() { // roofing torch with a live flame at the nozzle
 }
 export function gasBottle() { const o = mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.6, 16), M({ color: 0xc8361d, roughness: 0.5 })); o.position.y = 0.3; const g = new THREE.Group(); g.add(o); return g; }
 
+export function heldBlock(m) { const o = mesh(new THREE.BoxGeometry(0.6, 0.25, 0.3), m); o.rotation.y = Math.PI / 2; o.position.set(0, 0.22, 0.42); return o; }
 export function attach(w, tool, hand = 'rHand') { if (w.tool) w.tool.parent?.remove(w.tool); w.tool = tool; if (tool) w.j[hand].add(tool); }
 
 // ---- poses: every pose writes all joints, so switching is stateless ----
@@ -173,6 +174,13 @@ export const poses = {
   guide(w, ph) { // steering the mixer chute with both hands
     base(w); const j = w.j, m = Math.sin(ph * Math.PI * 2) * 0.05;
     R(j.spine, 0.2); R(j.lSh, -1.3 + m, 0, 0.1); R(j.rSh, -1.3 - m, 0, -0.1); R(j.lEl, -0.5); R(j.rEl, -0.5); R(j.lHip, -0.2); R(j.lKnee, 0.2);
+  },
+  carryBlock(w, ph) { // walking with a block held in front with both hands
+    poses.walk(w, ph); const j = w.j; R(j.lSh, -0.75, 0, 0.2); R(j.rSh, -0.75, 0, -0.2); R(j.lEl, -0.9); R(j.rEl, -0.9); R(j.spine, -0.05);
+  },
+  place(w, ph) { // setting a block onto the wall in front at chest height
+    base(w); const j = w.j, d = Math.sin(ph * Math.PI * 2) * 0.15;
+    R(j.spine, 0.3 + d * 0.6); R(j.lSh, -1.25 + d, 0, 0.2); R(j.rSh, -1.25 + d, 0, -0.2); R(j.lEl, -0.6); R(j.rEl, -0.6); R(j.lHip, -0.15); R(j.lKnee, 0.2);
   },
   holdStaff(w, ph) { base(w); const j = w.j; R(j.rSh, -0.5, 0, 0.1); R(j.rEl, -1.1); R(j.lSh, -0.2); R(j.spine, Math.sin(ph * Math.PI * 2) * 0.02); },
 };

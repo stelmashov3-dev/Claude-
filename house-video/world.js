@@ -290,12 +290,16 @@ const OPENINGS = [
   { w: 'S1', a0: -3.2, a1: -1.6, r0: 3, r1: 9, kind: 'win' }, { w: 'S1', a0: 1.6, a1: 3.2, r0: 3, r1: 9, kind: 'win' },
   { w: 'S3', a0: -1.8, a1: 0.2, r0: 3, r1: 9, kind: 'win' },
 ];
+// wall intervals of one block row, with window and door openings cut out
+function rowIntervals(r, wid, w) {
+  let iv = [[w.lo, w.hi]];
+  for (const op of OPENINGS) if (op.w === wid && r >= op.r0 && r <= op.r1) iv = iv.flatMap(([a, b]) => { const out = []; if (op.a0 > a) out.push([a, Math.min(b, op.a0)]); if (op.a1 < b) out.push([Math.max(a, op.a1), b]); return out; });
+  return iv;
+}
 const blocks = [];
 for (let r = 0; r < ROWS; r++) {
   for (const [wid, w] of Object.entries(WALLS)) {
-    let iv = [[w.lo, w.hi]];
-    for (const op of OPENINGS) if (op.w === wid && r >= op.r0 && r <= op.r1) iv = iv.flatMap(([a, b]) => { const out = []; if (op.a0 > a) out.push([a, Math.min(b, op.a0)]); if (op.a1 < b) out.push([Math.max(a, op.a1), b]); return out; });
-    for (const [a, b] of iv) {
+    for (const [a, b] of rowIntervals(r, wid, w)) {
       let cur = a, first = true;
       while (cur < b - 0.02) {
         const len = Math.min(first && r % 2 ? 0.3 : 0.6, b - cur);
@@ -305,8 +309,29 @@ for (let r = 0; r < ROWS; r++) {
     }
   }
 }
+// row schedule (legacy time t): a pause after every reinforced row for the bars in the chase
+const REINF_ROWS = [0, 3, 7], ROW_DT = 0.68, REINF_PAUSE = 0.6;
+const rowStart = (r) => 65.3 + r * ROW_DT + REINF_ROWS.filter((x) => x < r).length * REINF_PAUSE;
+const rowDone = (r) => rowStart(r) + 0.5 + 0.28;
+const reinf = [];
+for (const r of REINF_ROWS) for (const [wid, w] of Object.entries(WALLS)) for (const [a, b] of rowIntervals(r, wid, w)) for (const off of [-0.07, 0.07]) reinf.push({ r, w, a, b, off });
+const reinfIM = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat.rebar, reinf.length); reinfIM.castShadow = true; scene.add(reinfIM);
+// masons' scaffold inside along the front wall, and pallets of blocks
+const scaffold = new THREE.Group(); scene.add(scaffold);
+for (const [x0, x1] of [[-4.5, -0.5], [0.5, 4.5]]) {
+  for (const x of [x0, (x0 + x1) / 2, x1]) for (const z of [2.75, 3.6]) { const p = cyl(0.024, 0.024, 1.85, mat.steel, 8); p.position.set(x, 0.92, z); scaffold.add(p); }
+  for (const z of [2.75, 3.6]) for (const y of [0.9, 1.55]) { const r = box(x1 - x0, 0.04, 0.04, mat.steel); r.position.set((x0 + x1) / 2, y, z); scaffold.add(r); }
+  for (let i = 0; i < 3; i++) { const pl = box(x1 - x0, 0.05, 0.26, mat.wood); pl.position.set((x0 + x1) / 2, 1.6, 2.86 + i * 0.28); scaffold.add(pl); }
+}
+for (const [x, z] of [[7.0, -2.2], [7.0, -0.6], [-7.2, 1.2]]) {
+  const pal = box(1.2, 0.14, 1.0, mat.wood); pal.position.set(x, 0.07, z); scaffold.add(pal);
+  const st = box(1.2, 1.25, 1.0, mat.block); st.position.set(x, 0.77, z); scaffold.add(st);
+}
 const blockIM = new THREE.InstancedMesh(UNIT, mat.block, blocks.length); blockIM.castShadow = blockIM.receiveShadow = true;
-{ const r = rng(9), c = new THREE.Color(); blocks.forEach((b, i) => { const k = 0.93 + r() * 0.07; c.setRGB(k, k * 0.995, k * 0.985); blockIM.setColorAt(i, c); }); }
+{ const r = rng(9), c = new THREE.Color(); blocks.forEach((b, i) => {
+  const lintel = OPENINGS.some((op) => op.w === b.wid && b.r === op.r1 + 1 && (b.a0 + b.a1) / 2 > op.a0 - 0.3 && (b.a0 + b.a1) / 2 < op.a1 + 0.3);
+  const k = 0.93 + r() * 0.07; if (lintel) c.setRGB(0.62, 0.62, 0.6); else c.setRGB(k, k * 0.995, k * 0.985); blockIM.setColorAt(i, c);
+}); }
 scene.add(blockIM);
 const ringBeam = SEGS.map(() => { const o = ubox(mat.concrete); scene.add(o); return o; });
 
@@ -551,7 +576,7 @@ export function update(T) {
   });
   // stage 11: walls
   blocks.forEach((b, i) => {
-    const t0 = 65.3 + b.r * 0.82 + b.f * 0.5, k = ease(t0, t0 + 0.28, t);
+    const t0 = rowStart(b.r) + b.f * 0.5, k = ease(t0, t0 + 0.28, t);
     const y0 = WALL_Y0 + b.r * ROW_H + (1 - k) * 0.5, gap = 0.006;
     if (k <= 0) { m4.makeScale(0, 0, 0); blockIM.setMatrixAt(i, m4); return; }
     const L = b.a1 - b.a0 - gap, mid = (b.a0 + b.a1) / 2;
@@ -559,6 +584,14 @@ export function update(T) {
     m4.compose(vp, q.identity(), vs); blockIM.setMatrixAt(i, m4);
   });
   blockIM.instanceMatrix.needsUpdate = true;
+  reinf.forEach((p, i) => {
+    const k = ease(rowDone(p.r) + 0.05, rowDone(p.r) + 0.45, t), y = WALL_Y0 + (p.r + 1) * ROW_H + 0.008, len = (p.b - p.a) * k;
+    if (k <= 0) { m4.makeScale(0, 0, 0); reinfIM.setMatrixAt(i, m4); return; }
+    if (p.w.ax === 'x') { vp.set(p.a + len / 2, y, p.w.c + p.off); vs.set(len, 0.016, 0.016); } else { vp.set(p.w.c + p.off, y, p.a + len / 2); vs.set(0.016, 0.016, len); }
+    m4.compose(vp, q.identity(), vs); reinfIM.setMatrixAt(i, m4);
+  });
+  reinfIM.instanceMatrix.needsUpdate = true;
+  scaffold.visible = t > 64.8 && t < 79.2;
   // stage 12: ring beam
   SEGS.forEach((s, i) => { const a = ease(76.3 + i * 0.35, 77.6 + i * 0.35, t); const y0 = WALL_Y0 + ROWS * ROW_H; setExt(ringBeam[i], ...stripExt(s, WALL_HW, y0, y0 + 0.25 * a)); ringBeam[i].visible = a > 0.001; });
   // stage 13: roof
@@ -586,4 +619,4 @@ export function update(T) {
   });
 }
 
-export { clamp, smooth, ease, lin, outBack, lerp, rng, M, mat, box, cyl, ubox, setExt, SEGS, padG, WALLS, ROW_H, WALL_Y0, TRENCH_BOT, DIG0, DIG_SEG };
+export { clamp, smooth, ease, lin, outBack, lerp, rng, M, mat, box, cyl, ubox, setExt, SEGS, padG, WALLS, ROW_H, WALL_Y0, TRENCH_BOT, DIG0, DIG_SEG, rowStart, rowDone };
